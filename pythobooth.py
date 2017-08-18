@@ -73,12 +73,9 @@ def start_photobooth():
 		camera.annotate_text_size = 160
 		#camera.resolution = (1920, 1080)
 		#camera.exposure_mode = 'night'
-		#camera.flash_mode = 'torch'
-		camera.awb_mode = 'cloudy'
 
 		# START PICTURE SEQUENCE
 		camera.start_preview()
-		camera.flash_mode = 'torch'
 		camera.annotate_text = "PRETS ???"
 		sleep(3)
 		camera.annotate_text = "5"
@@ -96,7 +93,6 @@ def start_photobooth():
 		st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 		camera.capture('/home/pi/Desktop/photo.jpg')
 		camera.stop_preview()
-		camera.flash_mode = 'off'
 
 		# UPLOAD TO GOOGLE DRIVE
 		credentials = get_credentials()
