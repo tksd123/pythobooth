@@ -4,7 +4,7 @@ from __future__ import print_function
 import httplib2
 import os
 
-from picamera import PiCamera, Color
+import picamera
 from time import sleep
 from gpiozero import LED, Button
 from signal import pause
@@ -36,7 +36,6 @@ APPLICATION_NAME = 'Pythobooth'
 led = LED(4)
 button = Button(26)
 
-
 def get_credentials():
     """Gets valid user credentials from storage.
 
@@ -65,57 +64,94 @@ def get_credentials():
         print('Storing credentials to ' + credential_path)
     return credentials
 
-# define the photo taking function for when the big button is pressed 
-def start_photobooth(): 
-	if button.is_pressed:
-		# CAMERA
-		camera = PiCamera()
-		camera.annotate_text_size = 160
-		#camera.resolution = (1920, 1080)
-		#camera.exposure_mode = 'night'
 
-		# START PICTURE SEQUENCE
-		camera.start_preview()
-		camera.annotate_text = "PRETS ???"
-		sleep(3)
-		camera.annotate_text = "5"
-		sleep(1)
-		camera.annotate_text = "4"
-		sleep(1)
-		camera.annotate_text = "3"
-		sleep(1)
-		camera.annotate_text = "2"
-		sleep(1)
-		camera.annotate_text = "1"
-		sleep(1)
-		camera.annotate_text = ""
-		ts = time.time()
-		st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-		camera.capture('/home/pi/Desktop/photo.jpg')
-		camera.stop_preview()
+def start_photobooth(camera): 
+	
+	camera.annotate_text_size = 160
+	#camera.resolution = (1920, 1080)
+	#camera.exposure_mode = 'night'
 
-		# UPLOAD TO GOOGLE DRIVE
-		credentials = get_credentials()
-		http = credentials.authorize(httplib2.Http())
-		service = discovery.build('drive', 'v3', http=http)
-		
-		file_metadata = { 'name' : st + '.jpg' }
-		media = MediaFileUpload('/home/pi/Desktop/photo.jpg', mimetype='image/jpeg')
-		file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+	# START PICTURE SEQUENCE
+	camera.start_preview()
+	camera.annotate_text = "PRETS ???"
+	sleep(3)
+	camera.annotate_text = "5"
+	sleep(1)
+	camera.annotate_text = "4"
+	sleep(1)
+	camera.annotate_text = "3"
+	sleep(1)
+	camera.annotate_text = "2"
+	sleep(1)
+	camera.annotate_text = "1"
+	sleep(1)
+	camera.annotate_text = ""
+	# ADDING TIME ON BLACK BACKGROUND ON THE PICTURE
+	ts = time.time()
+	st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+	camera.annotate_background = picamera.Color('black')
+	camera.annotate_text_size = 20
+	camera.annotate_text = st
 
-		os.remove('/home/pi/Desktop/photo.jpg')
-		camera.close()
+	camera.capture('temp/photo.jpg')
+	camera.stop_preview()
+	# STAYING FEW SECONDS ON THE PICTURE WITH THE OVERLAY AND THEN REMOVE THE OVERLAY
+	# Load the arbitrarily sized image
+	img = Image.open('temp/photo.jpg')
+	# Create an image padded to the required size with
+	# mode 'RGB'
+	pad = Image.new('RGB', (
+	        ((img.size[0] + 31) // 32) * 32,
+	        ((img.size[1] + 15) // 16) * 16,
+		))
+	# Paste the original image into the padded one
+	pad.paste(img, (0, 0))
+	
+	# Add the overlay with the padded image as the source,
+	# but the original image's dimensions
+	o = camera.add_overlay(pad.tobytes(), size=img.size)
 
+	sleep(5)
+	camera.remove_overlay(o)
+
+	# UPLOAD TO GOOGLE DRIVE
+	credentials = get_credentials()
+	http = credentials.authorize(httplib2.Http())
+	service = discovery.build('drive', 'v3', http=http)
+	
+	file_metadata = { 'name' : st + '.jpg' }
+	media = MediaFileUpload('temp/photo.jpg', mimetype='image/jpeg')
+	file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+
+	os.remove('temp/photo.jpg')
 
 def main():
+			
+	# INSTANCIATE CAMERA
+	camera = picamera.PiCamera()
+
 	# START DISPLAY WHILE BUTTON NOT PRESSED
-	#img = Image.open('resources/intro.png')
-	#img.show()
+	# ADDING OVERLAY IMAGE
+	# Load the arbitrarily sized image
+	img = Image.open('resources/intro.png')
+	# Create an image padded to the required size with
+	# mode 'RGB'
+	pad = Image.new('RGB', (
+	        ((img.size[0] + 31) // 32) * 32,
+	        ((img.size[1] + 15) // 16) * 16,
+		))
+	# Paste the original image into the padded one
+	pad.paste(img, (0, 0))
+	
+	# Add the overlay with the padded image as the source,
+	# but the original image's dimensions
+	camera.add_overlay(pad.tobytes(), size=img.size)
 
 	try:
 	    while True:
 		led.on()
-		start_photobooth()
+		if button.is_pressed:
+			start_photobooth(camera)
 
 	except KeyboardInterrupt:
 		led.off()
